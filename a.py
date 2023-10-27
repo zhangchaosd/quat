@@ -1,5 +1,6 @@
 from Monster import Monster
 from TimeMachine import TimeMachine
+from SimTrader import SimTrader
 
 # http://baostock.com/
 """
@@ -22,8 +23,9 @@ from TimeMachine import TimeMachine
 
 def main():
     print("main")
-    monster = Monster()
-    tm = TimeMachine(monster)
+    trader = SimTrader()
+    monster = Monster(trader.bug, trader.sell)
+    tm = TimeMachine(monster, trader)
     tm.run()
     print("Done")
 
