@@ -21,13 +21,21 @@ from SimTrader import SimTrader
 """
 
 
+def run(start_date, end_date):
+    trader = SimTrader(start_date, end_date)
+    monster = Monster(trader.get_price, trader.buy, trader.sell)
+    while monster.update():
+        pass
+    monster.show()
+
+
 def main():
-    print("main")
-    trader = SimTrader()
-    monster = Monster(trader.bug, trader.sell)
-    tm = TimeMachine(monster, trader)
-    tm.run()
-    print("Done")
+    print("Start validation")
+    run("2015-03-02", "2023-01-03")
+    print("Validation done")
+    print("Start test")
+    run("2023-01-03", "2023-10-28")
+    print("Test done")
 
 
 if __name__ == "__main__":

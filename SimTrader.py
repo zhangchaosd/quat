@@ -1,44 +1,48 @@
 import baostock as bs
-import pandas as pd
+
+# import pandas as pd
 
 from Trader import Trader
 
 
 class SimTrader(Trader):
-    #### 登陆系统 ####
-    lg = bs.login()
-    # 显示登陆返回信息
-    if lg.error_code != "0":
-        print("login respond error_code:" + lg.error_code)
-        print("login respond  error_msg:" + lg.error_msg)
+    def __init__(self, start_date, end_date) -> None:
+        super().__init__()
+        self.start_date = start_date
+        self.end_date = end_date
+        lg = bs.login()
+        if lg.error_code != "0":
+            print("login respond error_code:" + lg.error_code)
+            print("login respond  error_msg:" + lg.error_msg)
 
-    #### 获取历史K线数据 ####
-    # 详细指标参数，参见“历史行情指标参数”章节
-    rs = bs.query_history_k_data_plus(
-        "sh.600000",
-        "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,peTTM,pbMRQ,psTTM,pcfNcfTTM,isST",
-        start_date="2017-06-01",
-        end_date="2017-12-31",
-        frequency="d",
-        adjustflag="3",
-    )  # frequency="d"取日k线，adjustflag="3"默认不复权
-    print("query_history_k_data_plus respond error_code:" + rs.error_code)
-    print("query_history_k_data_plus respond  error_msg:" + rs.error_msg)
-
-    #### 打印结果集 ####
-    data_list = []
-    while (rs.error_code == "0") & rs.next():
-        # 获取一条记录，将记录合并在一起
-        data_list.append(rs.get_row_data())
-    result = pd.DataFrame(data_list, columns=rs.fields)
-    #### 结果集输出到csv文件 ####
-    result.to_csv("D:/history_k_data.csv", encoding="gbk", index=False)
-    print(result)
-
-    #### 登出系统 ####
+        code = "sh.600000"
+        print(f"Now try to get prices: {code}, {start_date}, {end_date}")
+        rs = bs.query_history_k_data_plus(
+            code,
+            "date,time,code,open,high,low,close,volume,amount,adjustflag",
+            start_date=start_date,
+            end_date=end_date,
+            frequency="5",
+            # adjustflag="3",
+        )
+        print("Get prices done")
+        self.data_lists = dict()
+        self.data_lists[code] = []
+        self.iters = dict()
+        self.iters[code] = 0
+        while (rs.error_code == "0") & rs.next():
+            # 获取一条记录，将记录合并在一起
+            self.data_lists[code].append(rs.get_row_data())
 
     def __del__(self) -> None:
         bs.logout()
 
-    def get_price(self, code, time):
-        return 1.0
+    def get_price(self, code):
+        if self.iters[code] >= len(self.data_lists[code]):
+            return False, 0.0
+        price = self.data_lists[code][self.iters[code]][3]
+        self.iters[code] += 1
+        return True, eval(price)
+
+    def reset(self):
+        pass
