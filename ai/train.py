@@ -8,6 +8,9 @@ from torch.utils.data import DataLoader
 
 from TinyModel import TradingModel
 
+device = "cuda" if torch.cuda.is_available() else "mps"
+print(device)
+
 
 def get_codes():
     codes = pd.read_csv("train_data/survived_stocks.csv")
@@ -49,7 +52,7 @@ def trading_loss_function(
 
     sell_decision_loss = nn.MSELoss()(expected_sell_price, actual_sell_decision)
     sell_decision_loss = torch.where(
-        sell_executed, sell_decision_loss, torch.tensor(0.0, requires_grad=True)
+        sell_executed, sell_decision_loss, torch.tensor(0.0,device=device , requires_grad=True)
     )
     # print(buy_decision_loss, sell_decision_loss)
     sell_decision_loss = torch.mean(sell_decision_loss)
@@ -81,7 +84,7 @@ def main():
     x, y_buy_decision, y_sell_price = get_training_datas()
     epoch = 10
 
-    device = "cuda" if torch.cuda.is_available() else "mps"
+
     model = TradingModel(
         num_products=codes.shape[0], input_size=x.shape[3], hidden_size=128
     ).to(device)
