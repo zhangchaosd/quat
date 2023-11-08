@@ -17,7 +17,7 @@ def get_codes():
     return codes
 
 
-def get_training_datas():
+def get_datas(mode="train"):
     print("Start reading")
     x = pd.read_csv(f"train_data/100806_230918_x.csv")
     y = pd.read_csv(f"train_data/100806_230918_y.csv")
@@ -29,14 +29,11 @@ def get_training_datas():
     x = torch.tensor(x.values).to(torch.float)
     y_buy_decision = torch.tensor(y_buy_decision.values).to(torch.float)
     y_sell_price = torch.tensor(y_sell_price.values).to(torch.float)
-    x = x.unsqueeze(1)
-    x = x.unsqueeze(1)
-    y_buy_decision = y_buy_decision.unsqueeze(1)
-    y_sell_price = y_sell_price.unsqueeze(1)
-    print(x.shape)
-    print(y_buy_decision.shape)
-    print(y_sell_price.shape)
+    y_buy_decision=torch.nan_to_num(y_buy_decision)
+    y_sell_price=torch.nan_to_num(y_sell_price)
     print("Reading done")
+    # 3189 * 7787
+    print(f"input: {x.shape}, y: {y_buy_decision.shape} {y_sell_price.shape}")
     return x, y_buy_decision, y_sell_price
 
 
@@ -50,14 +47,17 @@ def trading_loss_function(
     sell_executed = actual_buy_decision == 1.0
     # print(sell_executed)
 
-    sell_decision_loss = nn.MSELoss()(expected_sell_price, actual_sell_decision)
-    sell_decision_loss = torch.where(
-        sell_executed, sell_decision_loss, torch.tensor(0.0,device=device , requires_grad=True)
+    sell_price_loss = nn.MSELoss()(expected_sell_price, actual_sell_decision)
+    sell_price_loss = torch.where(
+        sell_executed, sell_price_loss, torch.tensor(0.0,device=device , requires_grad=True)
     )
-    # print(buy_decision_loss, sell_decision_loss)
-    sell_decision_loss = torch.mean(sell_decision_loss)
+    # print(buy_decision_loss, sell_price_loss)
+    sell_price_loss = torch.mean(sell_price_loss)
+    # sell_price_loss *= 0.001
+    # loss = buy_decision_loss + sell_price_loss
+    # print(f"loss: {loss:>7f}, buy_decision_loss:{buy_decision_loss.item():>7f},sell_price_loss:{sell_price_loss.item():>7f}")
 
-    return buy_decision_loss + sell_decision_loss
+    return buy_decision_loss, sell_price_loss
 
     # 如果有成交，则计算盈利；如果没有成交，则为0
     profit = torch.where(
@@ -81,36 +81,43 @@ def trading_loss_function(
 def main():
     codes = get_codes()
     print(codes.shape[0])
-    x, y_buy_decision, y_sell_price = get_training_datas()
-    epoch = 10
+    x, y_buy_decision, y_sell_price = get_datas()
+    epoch = 10000
 
 
     model = TradingModel(
-        num_products=codes.shape[0], input_size=x.shape[3], hidden_size=128
+        num_products=codes.shape[0], input_size=x.shape[1], hidden_size=2048
     ).to(device)
     x = x.to(device)
     y_buy_decision = y_buy_decision.to(device)
     y_sell_price = y_sell_price.to(device)
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1)
     for i in range(epoch):
-        for j in range(x.shape[0]):
-            input = x[j].to(device)
-            buy_decision_label = y_buy_decision[j].to(device)
-            sell_price_label = y_sell_price[j].to(device)
+        # for j in range(x.shape[0]):
+        input = x.to(device)
+        buy_decision_label = y_buy_decision.to(device)
+        sell_price_label = y_sell_price.to(device)
+        # print("for input:", input.shape, buy_decision_label.shape, sell_price_label.shape)
 
-            # Compute prediction error
-            buy_prob, expected_price = model(input)
-            # print(buy_prob.shape, expected_price.shape)
+        # Compute prediction error
+        buy_prob, expected_price = model(input)
+        # print(buy_prob.shape, expected_price.shape)
 
-            loss = trading_loss_function(
-                buy_prob, buy_decision_label, expected_price, sell_price_label
-            )
+        buy_decision_loss, sell_price_loss = trading_loss_function(
+            buy_prob, buy_decision_label, expected_price, sell_price_label
+        )
 
-            # Backpropagation
-            loss.backward(retain_graph=True)
-            optimizer.step()
-            optimizer.zero_grad()
-            print(f"loss: {loss:>7f}")
+        loss = buy_decision_loss + sell_price_loss
+        print(f"{i} loss: {loss:>7f}, buy_decision_loss:{buy_decision_loss.item():>7f},sell_price_loss:{sell_price_loss.item():>7f}")
+
+        # Backpropagation
+        loss.backward(retain_graph=True)
+        optimizer.step()
+        optimizer.zero_grad()
+        # print(f"loss: {loss:>7f}")
+        if i % 100 == 0:
+            torch.save(model.state_dict(), f'ai/weights/{i}.pth')
+    
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from Monster import Monster
+
 from TimeMachine import TimeMachine
 from SimTrader import SimTrader
 
@@ -23,10 +23,10 @@ from SimTrader import SimTrader
 
 def run(start_date, end_date):
     trader = SimTrader(start_date, end_date)
-    monster = Monster(trader.get_price, trader.buy, trader.sell)
-    while monster.update():
+    while trader.run():
         pass
-    monster.show()
+    trader.show()
+    del trader
 
 
 def main():
@@ -34,7 +34,7 @@ def main():
     run("2015-03-02", "2023-01-03")
     print("Validation done")
     print("Start test")
-    run("2023-01-03", "2023-10-28")
+    # run("2023-01-03", "2023-10-28")
     print("Test done")
 
 
