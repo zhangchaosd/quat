@@ -1,4 +1,3 @@
-
 from TimeMachine import TimeMachine
 from SimTrader import SimTrader
 
@@ -23,8 +22,7 @@ from SimTrader import SimTrader
 
 def run(start_date, end_date):
     trader = SimTrader(start_date, end_date)
-    while trader.run():
-        pass
+    trader.run()
     trader.show()
     del trader
 

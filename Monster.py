@@ -11,4 +11,5 @@ class Monster:
         model.eval()
 
     def update(self, time, prices):
+        print("In monster: ", time, prices)
         pass
