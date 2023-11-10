@@ -1,22 +1,19 @@
 import os
 import glob
-import datetime
+import json
 import time
-
+from datetime import datetime, timedelta
 from tqdm import tqdm
 import akshare as ak
 import pandas as pd
 
-save_path = "dataset/daily"
-
-# 保存为csv文件，encoding="utf_8_sig"确保csv文件可以正常显示中文
-# spath = os.path.join(save_path, "data.csv")
-# df.to_csv(spath, encoding="utf_8_sig", index=False)
+import numpy as np
 
 
 def get_today_stocks():
-    today = datetime.datetime.now().strftime("%Y%m%d")
-    file = glob.glob("dataset/daily/codes_*.csv")
+    today = datetime.now().strftime("%Y%m%d")
+    # file = glob.glob("dataset/daily/codes_*.csv")
+    file = glob.glob(os.path.join("dataset", "daily", "codes_*.csv"))
     if len(file) != 0:
         last_date = os.path.basename(file[0])[6:14]
         if last_date == today:
@@ -30,8 +27,7 @@ def get_today_stocks():
     return stock_list
 
 
-
-def parse(code):
+def save_daily_stock_data_to_csv(code):
     data = ak.stock_zh_a_hist(
         symbol=code[2:], period="daily", start_date="19690101", end_date="20231109"
     )
@@ -39,15 +35,100 @@ def parse(code):
     data.to_csv(spath, encoding="utf_8_sig", index=False)
 
 
-codes = get_today_stocks()
+def save_stocks_by_code(codes):
+    for code in tqdm(codes):
+        while True:
+            try:
+                save_daily_stock_data_to_csv(code)
+            except:
+                time.sleep(2)
+                continue
+            break
 
-# codes = ["sz301468", "sz301469", "sz301486", "sz301487"]
-for code in tqdm(codes):
-    while True:
-        try:
-            parse(code)
-        except:
-            time.sleep(2)
-            continue
-        break
-# datas = map(parse, codes)
+
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)
+
+
+def fc_core(codes, datas, start_date_str="19901101", end_date_str="20231109"):
+    iters = [0 for i in range(len(codes))]
+
+    # Convert strings to datetime objects
+    start_date = datetime.strptime(start_date_str, "%Y%m%d")
+    end_date = datetime.strptime(end_date_str, "%Y%m%d")
+
+    # Use a while loop to iterate from start_date to end_date
+    current_date = start_date
+    while current_date <= end_date:
+        # Append current_date to the list
+        date = current_date.strftime("%Y-%m-%d")
+        print(date)
+        data_today = {}
+        for i in range(len(codes)):
+            if iters[i] not in datas[i].index:
+                continue
+            row_data = datas[i].loc[iters[i]]
+            if row_data["日期"] != date:
+                continue
+            data_today[codes[i]] = list(row_data)
+            iters[i] += 1
+        if data_today != {}:
+            filename = os.path.join("dataset", "daily", f"{date}.json")
+            with open(filename, "w") as f:
+                json.dump(data_today, f, cls=NpEncoder)
+
+        # Move to the next day
+        current_date += timedelta(days=1)
+
+
+def save_stocks_by_date(codes, start_date_str="19901101", end_date_str="20231109"):
+    datas = []
+    for code in tqdm(codes):
+        datas.append(pd.read_csv(os.path.join("dataset", "by_codes", f"{code}.csv")))
+    print("read done")
+    fc_core(codes, datas, start_date_str, end_date_str)
+
+
+def rm_(d):
+    return d[:4] + d[5:7] + d[8:10]
+
+
+def update(codes):
+    today = datetime.now().strftime("%Y-%m-%d")
+    file = glob.glob(os.path.join("dataset", "daily", "*.json"))
+    file = sorted(file)
+    if len(file) != 0:
+        last_date = os.path.basename(file[-1])[:10]
+        if last_date == today:
+            print("Up to date")
+            return
+        print(f"Try update {last_date} to {today}")
+        datas = []
+        for code in codes:
+            while True:
+                try:
+                    data = ak.stock_zh_a_hist(
+                        symbol=code[2:],
+                        period="daily",
+                        start_date=rm_(last_date),
+                        end_date=rm_(today),
+                    )
+                    datas.append(data)
+                except:
+                    time.sleep(2)
+                    continue
+                break
+        fc_core(codes, datas, rm_(last_date), rm_(today))
+
+
+codes = get_today_stocks()
+# save_stocks_by_code(codes)
+# save_stocks_by_date(codes)
+update(codes)
