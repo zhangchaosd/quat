@@ -51,7 +51,7 @@ class CustomWriter:
     def add_prob_dist(self, buy_decision_probs):
         # 计算概率的分布
         buy_decision_probs = buy_decision_probs.flatten()
-        probabilities, bins = np.histogram(buy_decision_probs.cpu(), bins=100, range=(0, 1))
+        probabilities, bins = np.histogram(buy_decision_probs.cpu().detach().numpy(), bins=100, range=(0, 1))
 
         # 绘制直方图
         plt.figure(figsize=(10, 6))
