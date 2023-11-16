@@ -86,13 +86,11 @@ def val(model, codes, files, start_idx, end_idx, total_x):
     num_days = end_idx - start_idx
     model.eval()
 
-    holds = []  # code, buy_price, target_sell_price
+    holds = []  # code, buy_price, target_sell_price, date, prob
     values_holds = 0.0
-    # total_x = torch.cat((total_x, val_x), 0)
     buy_decision_probs, expected_sell_prices = model(total_x)
     buy_decision_probs = buy_decision_probs[-num_days:]
     writer.add_prob_dist(buy_decision_probs)
-    # expected_sell_prices = expected_sell_prices[-len(val_x) :]
 
     for i, (file) in tqdm(enumerate(files[start_idx:end_idx]), total=num_days):
         price_of_the_day = load_js(file)
@@ -118,7 +116,7 @@ def val(model, codes, files, start_idx, end_idx, total_x):
         # expected_sell_price = expected_sell_prices[i]
         for i in range(len(buy_decision_prob)):
             if (
-                buy_decision_prob[i] > 0.5
+                buy_decision_prob[i] > 0.7
                 and codes[i] in price_of_the_day
                 and num_op * price_of_the_day[codes[i]][1] <= balance
             ):
@@ -143,14 +141,11 @@ def val(model, codes, files, start_idx, end_idx, total_x):
                 )
         writer.add_balance(file, balance)
         writer.add_total(file, balance + values_holds)
-        # print(holds)
     print(f"Balance: {balance}")
     print(f"Value of holds: {values_holds}")
     print(f"总资产:  {balance + values_holds}")
     print(f"经过 {end_idx - start_idx + 1} 个交易日")
     print(f"总收益率: {(balance + values_holds) / start_balance - 1.0}")
-    # print(holds)
-
     writer.close()
 
 

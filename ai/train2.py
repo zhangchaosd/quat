@@ -108,8 +108,17 @@ def get_data(codes, files, start_idx, end_idx):
 def trading_loss_function(
     buy_decision_prob, buy_label, expected_sell_price, price_label
 ):
-    buy_decision_loss = F.binary_cross_entropy_with_logits(buy_decision_prob, buy_label)
-    # return buy_decision_loss, None
+    buy_decision_prob = buy_decision_prob.flatten()
+    buy_label = buy_label.flatten()
+    t = buy_label.shape[0]
+    s = torch.sum(buy_label).item()
+    weight = buy_label * (1 - 2 * (s / t)) + (s / t)
+    buy_decision_loss = F.binary_cross_entropy(
+        buy_decision_prob,
+        buy_label,
+        weight,
+    )
+    return buy_decision_loss, None
 
     sell_executed = buy_label == 1
 
@@ -132,12 +141,14 @@ def train(model, train_x, buy_label, price_label, optimizer, epoch):
     buy_decision_loss, sell_price_loss = trading_loss_function(
         buy_decision_prob, buy_label, expected_sell_price, price_label
     )
-    loss = buy_decision_loss + sell_price_loss
-    # loss = buy_decision_loss
+    # loss = buy_decision_loss + sell_price_loss
+    loss = buy_decision_loss
     loss.backward()
     optimizer.step()
-    print(f"{epoch} loss: {loss:>7f}, buy_decision_loss:{buy_decision_loss.item():>7f},sell_price_loss:{sell_price_loss.item():>7f}")
-    # print(f"{epoch} loss: {loss:>7f}")
+    # print(
+    #     f"{epoch} loss: {loss:>7f}, buy_decision_loss:{buy_decision_loss.item():>7f},sell_price_loss:{sell_price_loss.item():>7f}"
+    # )
+    print(f"{epoch} loss: {loss:>7f}")
     return loss
 
 
@@ -148,8 +159,8 @@ def main():
     val_x, val_b, val_p = get_data(codes, files, val_start, test_start)
     test_x, test_b, test_p = get_data(codes, files, test_start, test_end)
     model = TradingModel(len(codes), train_x.shape[1], 2048).to(device)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     scheduler = MultiStepLR(optimizer, milestones=[1000, 5000, 12000], gamma=0.1)
     epoch = 20000
     for i in range(1, epoch + 1):
@@ -164,15 +175,15 @@ def main():
         if i % 1000 == 0:
             ckpt_path = os.path.join("ai", "weights", f"{i}_{loss:>3f}.pth")
             print(f"Saving model to {ckpt_path}")
-            # torch.save(model.state_dict(), ckpt_path)
-            # val(
-            #     model,
-            #     codes,
-            #     files,
-            #     val_start,
-            #     test_start,
-            #     torch.cat((train_x, val_x), 0).to(device).clone(),
-            # )
+            torch.save(model.state_dict(), ckpt_path)
+            val(
+                model,
+                codes,
+                files,
+                val_start,
+                test_start,
+                torch.cat((train_x, val_x), 0).to(device).clone(),
+            )
         scheduler.step()
     val(
         model,
