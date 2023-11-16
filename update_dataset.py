@@ -91,6 +91,7 @@ def fc_core(codes, datas, start_date_str="19901101", end_date_str="20231109"):
 def save_stocks_by_date(codes, start_date_str="19901101", end_date_str="20231109"):
     datas = []
     for code in tqdm(codes):
+        print(code)
         datas.append(pd.read_csv(os.path.join("dataset", "by_codes", f"{code}.csv")))
     print("read done")
     fc_core(codes, datas, start_date_str, end_date_str)
@@ -128,7 +129,41 @@ def update(codes):
         fc_core(codes, datas, rm_(last_date), rm_(today))
 
 
+def construct_labels1(folder="labels1"):
+    data_path = os.path.join("dataset", "daily")
+    label1_path = os.path.join("dataset", folder)
+    files = glob.glob(os.path.join(data_path, "*.json"))
+    files = sorted(files)
+    datas = []
+    print("Start loading daily datas")
+    for file in tqdm(files):
+        with open(file, "r") as f:
+            datas.append(json.load(f))
+    window_size = 5
+    print("Start construct label1")
+    for i in tqdm(range(len(files) - window_size)):
+        codes = list(datas[i].keys())
+        label = {}
+        for code in codes:
+            buy = 0
+            target_price = datas[i][code][3] * 1.03  # max
+            for j in range(1, window_size + 1):
+                if (code in datas[i + j]
+                    and datas[i + j][code][1] >= target_price
+                ):
+                    buy = 1
+                    target_price = datas[i + j][code][1]  # open
+            label[code] = [buy, target_price if buy else 0.0]
+        if label != {}:
+            with open(os.path.join(label1_path, os.path.basename(files[i])), "w") as f:
+                json.dump(label, f)
+
+def get_label1_datas():
+    pass
+
+
 codes = get_today_stocks()
 # save_stocks_by_code(codes)
-# save_stocks_by_date(codes)
-update(codes)
+save_stocks_by_date(codes)
+# update(codes)
+# construct_labels1()
