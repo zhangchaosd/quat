@@ -82,6 +82,7 @@ def val(model, codes, files, start_idx, end_idx, total_x):
     balance = 10000.0
     start_balance = balance
     num_op = 1
+    v1 = 0.6
 
     num_days = end_idx - start_idx
     model.eval()
@@ -116,7 +117,7 @@ def val(model, codes, files, start_idx, end_idx, total_x):
         # expected_sell_price = expected_sell_prices[i]
         for i in range(len(buy_decision_prob)):
             if (
-                buy_decision_prob[i] > 0.7
+                buy_decision_prob[i] > v1
                 and codes[i] in price_of_the_day
                 and num_op * price_of_the_day[codes[i]][1] <= balance
             ):
