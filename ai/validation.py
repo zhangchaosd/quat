@@ -2,7 +2,8 @@ import json
 from datetime import datetime
 import os
 import torch
-
+import matplotlib.pyplot as plt
+import numpy as np
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
@@ -14,7 +15,8 @@ def get_date_from_file(file):
 class CustomWriter:
     def __init__(self, files) -> None:
         current_time = datetime.now().strftime("%Y_%m_%d__%H_%M_%S")
-        self.writer = SummaryWriter(os.path.join("val_results", current_time))
+        self.folder = os.path.join("val_results", current_time)
+        self.writer = SummaryWriter(self.folder)
 
         files = sorted([get_date_from_file(file) for file in files])
         self.idxs = [i for i in range(len(files))]
@@ -46,6 +48,27 @@ class CustomWriter:
     def add_sell(self, date, code, price, count=100):
         self.sells_count[self.idxs[get_date_from_file(date)]] += 1
 
+    def add_prob_dist(self, buy_decision_probs):
+        # 计算概率的分布
+        buy_decision_probs = buy_decision_probs.flatten()
+        probabilities, bins = np.histogram(buy_decision_probs, bins=100, range=(0, 1))
+
+        # 绘制直方图
+        plt.figure(figsize=(10, 6))
+        plt.bar(
+            bins[:-1],
+            probabilities,
+            width=bins[1] - bins[0],
+            color="skyblue",
+            edgecolor="black",
+        )
+        plt.xlabel("Probability")
+        plt.ylabel("Frequency")
+        plt.title("Probability Distribution of Elements in the Tensor")
+        plt.grid(True)
+        plt.savefig(os.path.join(self.folder, "prob_dist.png"))
+        # plt.show()
+
 
 def load_js(path):
     with open(path, "r") as f:
@@ -68,6 +91,7 @@ def val(model, codes, files, start_idx, end_idx, total_x):
     # total_x = torch.cat((total_x, val_x), 0)
     buy_decision_probs, expected_sell_prices = model(total_x)
     buy_decision_probs = buy_decision_probs[-num_days:]
+    writer.add_prob_dist(buy_decision_probs)
     # expected_sell_prices = expected_sell_prices[-len(val_x) :]
 
     for i, (file) in tqdm(enumerate(files[start_idx:end_idx]), total=num_days):
