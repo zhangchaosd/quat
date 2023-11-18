@@ -114,32 +114,56 @@ def val(model, codes, files, start_idx, end_idx, total_x):
             holds.remove(hold)
         # print(holds)
         buy_decision_prob = buy_decision_probs[i]
-        # expected_sell_price = expected_sell_prices[i]
-        for i in range(len(buy_decision_prob)):
-            if (
-                buy_decision_prob[i] > v1
-                and codes[i] in price_of_the_day
-                and num_op * price_of_the_day[codes[i]][1] <= balance
-            ):
-                balance -= num_op * price_of_the_day[codes[i]][1]
+        codes_probs = list(zip(codes, buy_decision_prob.tolist()))
+        codes_probs = [(code, prob) for code, prob in codes_probs if code in price_of_the_day and prob>0.6]
+        codes_probs = sorted(codes_probs, key=lambda x:-x[1])
+        for code, prob in codes_probs[-5:]:
+            if (num_op * price_of_the_day[code][1] <= balance):
+                balance -= num_op * price_of_the_day[code][1]
                 holds.append(
                     [
-                        codes[i],
-                        price_of_the_day[codes[i]][1],
+                        code,
+                        price_of_the_day[code][1],
                         # expected_sell_price[i].item(),
-                        price_of_the_day[codes[i]][1] * 1.03,
+                        price_of_the_day[code][1] * 1.06,
                         file,
-                        buy_decision_prob[i].item(),
+                        prob,
                     ]
                 )
-                values_holds += price_of_the_day[codes[i]][2] * num_op
+                values_holds += price_of_the_day[code][2] * num_op
                 # print(f"Buy {codes[i]} on {price_of_the_day[codes[i]][1]}!")
                 writer.add_buy(
                     file,
-                    codes[i],
-                    price_of_the_day[codes[i]][1],
+                    code,
+                    price_of_the_day[code][1],
                     num_op,
                 )
+        # expected_sell_price = expected_sell_prices[i]
+        # for i in range(len(buy_decision_prob)):
+        #     if (
+        #         buy_decision_prob[i] > v1
+        #         and codes[i] in price_of_the_day
+        #         and num_op * price_of_the_day[codes[i]][1] <= balance
+        #     ):
+        #         balance -= num_op * price_of_the_day[codes[i]][1]
+        #         holds.append(
+        #             [
+        #                 codes[i],
+        #                 price_of_the_day[codes[i]][1],
+        #                 # expected_sell_price[i].item(),
+        #                 price_of_the_day[codes[i]][1] * 1.03,
+        #                 file,
+        #                 buy_decision_prob[i].item(),
+        #             ]
+        #         )
+        #         values_holds += price_of_the_day[codes[i]][2] * num_op
+        #         # print(f"Buy {codes[i]} on {price_of_the_day[codes[i]][1]}!")
+        #         writer.add_buy(
+        #             file,
+        #             codes[i],
+        #             price_of_the_day[codes[i]][1],
+        #             num_op,
+        #         )
         writer.add_balance(file, balance)
         writer.add_total(file, balance + values_holds)
     print(f"Balance: {balance}")

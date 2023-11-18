@@ -92,7 +92,10 @@ def save_stocks_by_date(codes, start_date_str="19901101", end_date_str="20231109
     datas = []
     for code in tqdm(codes):
         print(code)
-        datas.append(pd.read_csv(os.path.join("dataset", "by_codes", f"{code}.csv")))
+        if os.path.getsize(os.path.join("dataset", "by_codes", f"{code}.csv")) > 5:
+            datas.append(pd.read_csv(os.path.join("dataset", "by_codes", f"{code}.csv")))
+        else:
+            datas.append(pd.DataFrame())
     print("read done")
     fc_core(codes, datas, start_date_str, end_date_str)
 
@@ -163,7 +166,7 @@ def get_label1_datas():
 
 
 codes = get_today_stocks()
-# save_stocks_by_code(codes)
+save_stocks_by_code(codes)
 save_stocks_by_date(codes)
 # update(codes)
-# construct_labels1()
+construct_labels1()

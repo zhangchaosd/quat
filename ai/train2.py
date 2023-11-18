@@ -46,7 +46,7 @@ def get_codes(start_date_str="19901101", end_date_str="20231109"):
     print(
         f"Found {len(files)} days, start finding from {start_date_str} to {end_date_str}"
     )
-    train_dates = files[4500:6000]
+    train_dates = files[4000:6000]
     val_dates = files[6000:7000]
     test_dates = files[7000:-5]
     print(f"Train start: {train_dates[0]}")
@@ -60,7 +60,7 @@ def get_codes(start_date_str="19901101", end_date_str="20231109"):
         codes = list(set(codes).intersection(set(get_codes_of_date(file))))
     print("Total codes: ", len(codes))
     codes = sorted(codes)
-    return codes, files, 4500, 6000, 7000, len(files) - 5
+    return codes, files, 4000, 6000, 7000, len(files) - 5
 
 
 def get_data(codes, files, start_idx, end_idx):
@@ -113,11 +113,12 @@ def trading_loss_function(
     t = buy_label.shape[0]
     s = torch.sum(buy_label).item()
     weight = buy_label * (1 - 2 * (s / t)) + (s / t)
-    buy_decision_loss = F.binary_cross_entropy(
-        buy_decision_prob,
-        buy_label,
-        weight,
-    )
+    # buy_decision_loss = F.binary_cross_entropy(
+    #     buy_decision_prob,
+    #     buy_label,
+    #     weight,
+    # )
+    buy_decision_loss = F.binary_cross_entropy(buy_decision_prob,buy_label)
     return buy_decision_loss, None
 
     sell_executed = buy_label == 1
@@ -158,8 +159,20 @@ def main():
     train_x, train_b, train_p = get_data(codes, files, train_start, val_start)
     val_x, val_b, val_p = get_data(codes, files, val_start, test_start)
     test_x, test_b, test_p = get_data(codes, files, test_start, test_end)
-    model = TradingModel(len(codes), train_x.shape[1], 2048).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+    model = TradingModel(len(codes), train_x.shape[1], 1024).to(device)
+    only_test = False
+    if only_test:
+        model.load_state_dict(torch.load('ai/weights/12000_0.209943.pth'))
+        val(
+            model,
+            codes,
+            files,
+            val_start,
+            test_start,
+            torch.cat((train_x, val_x), 0).to(device).clone(),
+        )
+        return
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     # optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     scheduler = MultiStepLR(optimizer, milestones=[1000, 5000, 12000], gamma=0.1)
     epoch = 20000
