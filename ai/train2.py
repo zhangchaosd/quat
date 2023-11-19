@@ -9,6 +9,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import StepLR, MultiStepLR
+from torcheval.metrics import BinaryAccuracy, BinaryAUROC
 
 # from torch.utils.data import DataLoader
 from validation import val
@@ -110,15 +111,15 @@ def trading_loss_function(
 ):
     buy_decision_prob = buy_decision_prob.flatten()
     buy_label = buy_label.flatten()
-    t = buy_label.shape[0]
-    s = torch.sum(buy_label).item()
-    weight = buy_label * (1 - 2 * (s / t)) + (s / t)
+    # t = buy_label.shape[0]
+    # s = torch.sum(buy_label).item()
+    # weight = buy_label * (1 - 2 * (s / t)) + (s / t)
     # buy_decision_loss = F.binary_cross_entropy(
     #     buy_decision_prob,
     #     buy_label,
     #     weight,
     # )
-    buy_decision_loss = F.binary_cross_entropy(buy_decision_prob,buy_label)
+    buy_decision_loss = F.binary_cross_entropy_with_logits(buy_decision_prob,buy_label)
     return buy_decision_loss, None
 
     sell_executed = buy_label == 1
@@ -134,7 +135,7 @@ def trading_loss_function(
     return buy_decision_loss, sell_price_loss
 
 
-def train(model, train_x, buy_label, price_label, optimizer, epoch):
+def train(model, train_x, buy_label, price_label, optimizer, epoch, metric_acc, metric_auc):
     model.train()
     optimizer.zero_grad()
     buy_decision_prob, expected_sell_price = model(train_x)
@@ -149,7 +150,11 @@ def train(model, train_x, buy_label, price_label, optimizer, epoch):
     # print(
     #     f"{epoch} loss: {loss:>7f}, buy_decision_loss:{buy_decision_loss.item():>7f},sell_price_loss:{sell_price_loss.item():>7f}"
     # )
-    print(f"{epoch} loss: {loss:>7f}")
+    metric_acc.reset()
+    metric_acc.update(buy_decision_prob.flatten(), buy_label.flatten())
+    metric_auc.reset()
+    metric_auc.update(buy_decision_prob.flatten(), buy_label.flatten())
+    print(f"{epoch} loss: {loss:>7f} ACC: {metric_acc.compute()} AUC: {metric_auc.compute()}")
     return loss
 
 
@@ -159,10 +164,10 @@ def main():
     train_x, train_b, train_p = get_data(codes, files, train_start, val_start)
     val_x, val_b, val_p = get_data(codes, files, val_start, test_start)
     test_x, test_b, test_p = get_data(codes, files, test_start, test_end)
-    model = TradingModel(len(codes), train_x.shape[1], 1024).to(device)
+    model = TradingModel(len(codes), train_x.shape[1], 4096).to(device)
     only_test = False
     if only_test:
-        model.load_state_dict(torch.load('ai/weights/12000_0.209943.pth'))
+        model.load_state_dict(torch.load('ai/weights/1000_0.437538.pth'))
         val(
             model,
             codes,
@@ -172,10 +177,12 @@ def main():
             torch.cat((train_x, val_x), 0).to(device).clone(),
         )
         return
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0001)
     # optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    scheduler = MultiStepLR(optimizer, milestones=[1000, 5000, 12000], gamma=0.1)
+    scheduler = MultiStepLR(optimizer, milestones=[1000, 5000, 12000], gamma=0.3)
     epoch = 20000
+    metric_acc = BinaryAccuracy()
+    metric_auc = BinaryAUROC()
     for i in range(1, epoch + 1):
         loss = train(
             model,
@@ -184,6 +191,8 @@ def main():
             train_p.to(device),
             optimizer,
             i,
+            metric_acc,
+            metric_auc,
         )
         if i % 1000 == 0:
             ckpt_path = os.path.join("ai", "weights", f"{i}_{loss:>3f}.pth")
@@ -196,6 +205,10 @@ def main():
                 val_start,
                 test_start,
                 torch.cat((train_x, val_x), 0).to(device).clone(),
+                f"{i}_{loss:>3f}",
+                metric_acc,
+                metric_auc,
+                val_b,
             )
         scheduler.step()
     val(

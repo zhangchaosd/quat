@@ -22,12 +22,15 @@ class TradingModel(nn.Module):
         # print("hidden", hidden.shape)
 
         # 二分类输出：是否购买（采用sigmoid激活）
-        buy_prob = torch.sigmoid(self.fc_buy(output))
+        if not self.training:
+            buy_prob = torch.sigmoid(self.fc_buy(output))
+        else:
+            buy_prob = self.fc_buy(output)
 
         # 回归输出：期望卖出价格（可以采用ReLU激活以保证价格非负）
-        expected_price = torch.relu(self.fc_price(output))
+        # expected_price = torch.relu(self.fc_price(output))
 
-        return buy_prob, expected_price
+        # return buy_prob, expected_price
         return buy_prob, None
 
 
