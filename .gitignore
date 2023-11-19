@@ -5,3 +5,4 @@ __pycache__
 *.pth
 dataset
 val_results
+*.pt

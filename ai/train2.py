@@ -64,8 +64,23 @@ def get_codes(start_date_str="19901101", end_date_str="20231109"):
     return codes, files, 4000, 6000, 7000, len(files) - 5
 
 
-def get_data(codes, files, start_idx, end_idx):
+def get_data(codes, files, start_idx, end_idx, mode):
     print("Start reading data")
+    x_path = mode + "_x.pt"
+    buy_label_path = mode + "_b.pt"
+    buy_price_path = mode + "_p.pt"
+    if (
+        os.path.exists(x_path)
+        and os.path.exists(buy_label_path)
+        and os.path.exists(buy_price_path)
+    ):
+        print("Read from cache")
+        return (
+            torch.load(x_path),
+            torch.load(buy_label_path),
+            torch.load(buy_price_path),
+        )
+
     datas_x = []
     for i in range(start_idx, end_idx):
         data = load_js(files[i])
@@ -103,6 +118,10 @@ def get_data(codes, files, start_idx, end_idx):
     print(
         datas_y_price.shape, datas_y_price.dtype
     )  # torch.Size([1500, 5071]) torch.float32
+    torch.save(datas_x, x_path)
+    torch.save(datas_y_buy, buy_label_path)
+    torch.save(datas_y_price, buy_price_path)
+    print("Data cache saved")
     return datas_x, datas_y_buy, datas_y_price
 
 
@@ -119,7 +138,7 @@ def trading_loss_function(
     #     buy_label,
     #     weight,
     # )
-    buy_decision_loss = F.binary_cross_entropy_with_logits(buy_decision_prob,buy_label)
+    buy_decision_loss = F.binary_cross_entropy_with_logits(buy_decision_prob, buy_label)
     return buy_decision_loss, None
 
     sell_executed = buy_label == 1
@@ -135,7 +154,9 @@ def trading_loss_function(
     return buy_decision_loss, sell_price_loss
 
 
-def train(model, train_x, buy_label, price_label, optimizer, epoch, metric_acc, metric_auc):
+def train(
+    model, train_x, buy_label, price_label, optimizer, epoch, metric_acc, metric_auc
+):
     model.train()
     optimizer.zero_grad()
     buy_decision_prob, expected_sell_price = model(train_x)
@@ -154,35 +175,30 @@ def train(model, train_x, buy_label, price_label, optimizer, epoch, metric_acc, 
     metric_acc.update(buy_decision_prob.flatten(), buy_label.flatten())
     metric_auc.reset()
     metric_auc.update(buy_decision_prob.flatten(), buy_label.flatten())
-    print(f"{epoch} loss: {loss:>7f} ACC: {metric_acc.compute()} AUC: {metric_auc.compute()}")
+    print(
+        f"{epoch} loss: {loss:>7f} ACC: {metric_acc.compute()} AUC: {metric_auc.compute()}"
+    )
     return loss
 
 
 def main():
     codes, files, train_start, val_start, test_start, test_end = get_codes()
     print(len(codes))
-    train_x, train_b, train_p = get_data(codes, files, train_start, val_start)
-    val_x, val_b, val_p = get_data(codes, files, val_start, test_start)
-    test_x, test_b, test_p = get_data(codes, files, test_start, test_end)
+    train_x, train_b, train_p = get_data(codes, files, train_start, val_start, "train")
+    val_x, val_b, val_p = get_data(codes, files, val_start, test_start, "val")
+    test_x, test_b, test_p = get_data(codes, files, test_start, test_end, "test")
+    metric_acc = BinaryAccuracy()
+    metric_auc = BinaryAUROC()
     model = TradingModel(len(codes), train_x.shape[1], 4096).to(device)
-    only_test = False
-    if only_test:
-        model.load_state_dict(torch.load('ai/weights/1000_0.437538.pth'))
-        val(
-            model,
-            codes,
-            files,
-            val_start,
-            test_start,
-            torch.cat((train_x, val_x), 0).to(device).clone(),
-        )
-        return
+
+    ckpt_path = "ai/weights/9000_0.225180.pth"
+    # model.load_state_dict(torch.load(ckpt_path))
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.0001)
     # optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     scheduler = MultiStepLR(optimizer, milestones=[1000, 5000, 12000], gamma=0.3)
     epoch = 20000
-    metric_acc = BinaryAccuracy()
-    metric_auc = BinaryAUROC()
+
     for i in range(1, epoch + 1):
         loss = train(
             model,
