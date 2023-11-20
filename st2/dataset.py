@@ -29,7 +29,7 @@ def get_codes_of_date(path):
     return codes
 
 
-def get_codes(start_date_str="2016-11-01", end_date_str="2023-10-25"):
+def get_codes(start_date_str, end_date_str):
     files = sorted(glob.glob(os.path.join("dataset", "daily", "*.json")))
     print(
         f"Found {len(files)} days, start finding from {start_date_str} to {end_date_str}"
@@ -61,7 +61,6 @@ class SlidWindowDataset(Dataset):
         start_date_str="2016-11-01",
         end_date_str="2023-10-25",
         windows_size=15,
-        path="dataset/daily",
     ):
         self.window_size = windows_size
         self.codes, files = get_codes(start_date_str, end_date_str)
@@ -186,20 +185,23 @@ def trading_loss_function(
 def main():
     # Train start: dataset\daily\2007-01-08.json
     # Train end: dataset\daily\2015-04-01.json
-    train_dataset = SlidWindowDataset()
+    train_dataset = SlidWindowDataset("2010-08-11", "2014-11-03")
     metric_acc = BinaryAccuracy()
     metric_auc = BinaryAUROC()
     model = TradingModel(
-        train_dataset.get_num_of_stocks(), train_dataset[0][0].shape[1], 1024
+        train_dataset.get_num_of_stocks(), train_dataset[0][0].shape[1], 4096, 1
     ).to(device)
     model.train()
-    data_loader = DataLoader(train_dataset, batch_size=16)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.000001)
-    scheduler = MultiStepLR(optimizer, milestones=[1000, 5000, 12000], gamma=0.3)
+    data_loader = DataLoader(train_dataset, batch_size=256)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0000001)
+    scheduler = MultiStepLR(optimizer, milestones=[50000, 10000, 15000], gamma=0.2)
     epoch = 20000
     for i in range(1, epoch + 1):
         metric_acc.reset()
         metric_auc.reset()
+        ave_loss = 0.
+        ave_loss_b = 0.
+        ave_loss_p = 0.
         for step, (x, y_b, y_p) in enumerate(data_loader):
             x = x.to(device)
             y_b = y_b.to(device)
@@ -208,14 +210,20 @@ def main():
             buy_decision_loss, sell_price_loss = trading_loss_function(
                 pre_probs, y_b, pre_prices, y_p
             )
-            loss = buy_decision_loss + sell_price_loss
+            # loss = buy_decision_loss + 0.01 * sell_price_loss
+            loss = buy_decision_loss
             loss.backward()
             optimizer.step()
             metric_acc.update(torch.sigmoid(pre_probs.flatten()), y_b.flatten())
             metric_auc.update(torch.sigmoid(pre_probs.flatten()), y_b.flatten())
+            ave_loss_b += buy_decision_loss.detach().cpu().item()
+            ave_loss_p += sell_price_loss.detach().cpu().item()
+        ave_loss_b /= len(data_loader)
+        ave_loss_p /= len(data_loader)
+        ave_loss = ave_loss_b + ave_loss_p
         scheduler.step()
         print(
-            f"epoch: {i}, b_loss:{buy_decision_loss.detach().cpu().item()}, p_loss:{sell_price_loss.detach().cpu().item()} ACC: {metric_acc.compute()} AUC: {metric_auc.compute()}"
+            f"epoch: {i}, b_loss:{ave_loss_b}, p_loss:{ave_loss_p} ACC: {metric_acc.compute()} AUC: {metric_auc.compute()}"
         )
         if i % 1000 == 0:
             ckpt_path = os.path.join("st2", f"{i}_{loss:>3f}.pth")

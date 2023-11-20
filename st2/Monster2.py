@@ -1,5 +1,5 @@
 import torch
-from ai.TinyModel import TradingModel
+from st2.dataset import TradingModel
 
 
 class Monster2:

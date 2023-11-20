@@ -173,7 +173,7 @@ def construct_labels2(folder="labels2"):
         with open(file, "r") as f:
             datas.append(json.load(f))
     window_size = 10
-    print("Start construct label1")
+    print("Start construct label2")
     for i in tqdm(range(len(files) - window_size - 1)):
         codes = list(datas[i].keys())
         label = {}
