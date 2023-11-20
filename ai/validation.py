@@ -28,6 +28,9 @@ class CustomWriter:
         self.balances = []
         self.totals = []
 
+        self.accs = []
+        self.aucs = []
+
         self.vars = dict()
 
     def export_pic(self, x_data, x_label, y_data, y_label, save_name):
@@ -42,13 +45,15 @@ class CustomWriter:
         plt.close()
 
     def close(self):
-        self.export_pic(self.dates, "Date", self.totals, "Total", "Total.png")
-        self.export_pic(self.dates, "Date", self.balances, "Balance", "Balance.png")
+        self.export_pic(self.dates, "Date", self.totals, "Total", "0_Total.png")
+        self.export_pic(self.dates, "Date", self.balances, "Balance", "1_Balance.png")
+        self.export_pic(self.dates, "Acc", self.accs, "ACC", "2_acc.png")
+        self.export_pic(self.dates, "Auc", self.aucs, "AUC", "3_auc.png")
         self.export_pic(
-            self.dates, "Date", self.buys_count, "buys_count", "buys_count.png"
+            self.dates, "Date", self.buys_count, "buys_count", "4_buys_count.png"
         )
         self.export_pic(
-            self.dates, "Date", self.sells_count, "sells_count", "sells_count.png"
+            self.dates, "Date", self.sells_count, "sells_count", "5_sells_count.png"
         )
 
         fig, ax = plt.subplots()
@@ -72,6 +77,12 @@ class CustomWriter:
 
     def add_total(self, date, total):
         self.totals.append(total)
+
+    def add_acc(self, date, acc):
+        self.accs.append(acc)
+
+    def add_auc(self, date, auc):
+        self.aucs.append(auc)
 
     def add_buy(self, date, code, price, count=100):
         self.buys_count[self.idxs[get_date_from_file(date)]] += 1
@@ -149,6 +160,12 @@ def val(
         price_of_the_day = load_js(file)
         values_holds = 0.0
         buy_decision_prob = buy_decision_probs[i]
+        metric_acc.reset()
+        metric_acc.update(buy_decision_prob.flatten(), buy_label[i].flatten())
+        writer.add_acc(file, metric_acc.compute())
+        metric_auc.reset()
+        metric_auc.update(buy_decision_prob.flatten(), buy_label[i].flatten())
+        writer.add_auc(file, metric_auc.compute())
         holds, balance = sell_core(price_of_the_day, balance, holds, writer, file, fc2)
         codes_probs = list(zip(codes, buy_decision_prob.tolist()))
         want_codes = fc1(codes_probs, price_of_the_day, balance)
@@ -345,27 +362,28 @@ if __name__ == "__main__":
             model,
             codes,
             files,
-            val_start,
+            # val_start,
+            train_start,
             test_start,
             torch.cat((train_x, val_x), 0).to(device).clone(),
             os.path.basename(ckpt_path),
             metric_acc,
             metric_auc,
-            val_b,
+            torch.cat((train_b, val_b), 0).to(device).clone(),
             decision_buy,
             decision_sell,
         )
-        val(
-            model,
-            codes,
-            files,
-            val_start,
-            test_end,
-            torch.cat((train_x, val_x, test_x), 0).to(device).clone(),
-            os.path.basename(ckpt_path),
-            metric_acc,
-            metric_auc,
-            torch.cat((val_b, test_b), 0).to(device).clone(),
-            decision_buy,
-            decision_sell,
-        )
+        # val(
+        #     model,
+        #     codes,
+        #     files,
+        #     val_start,
+        #     test_end,
+        #     torch.cat((train_x, val_x, test_x), 0).to(device).clone(),
+        #     os.path.basename(ckpt_path),
+        #     metric_acc,
+        #     metric_auc,
+        #     torch.cat((val_b, test_b), 0).to(device).clone(),
+        #     decision_buy,
+        #     decision_sell,
+        # )
