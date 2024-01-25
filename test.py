@@ -3,19 +3,21 @@ import os
 import json
 import glob
 import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from torch.nn import functional as F
 
+from torcheval.metrics import BinaryAccuracy
 
-with open("dataset/daily/2023-11-09.json", "r") as f:
-    d = json.load(f)
-print(len(d.keys()))
+metric = BinaryAccuracy()
+input = torch.tensor([0.0, 0.0, 0.1, 0.1])
+target = torch.tensor([1.0, 0.0, 1.0, 1.0])
+metric.update(input, target)
+a = metric.compute()
 
-today = "20231110"
-file = glob.glob("dataset/daily/codes_*.csv")
-stock_list = pd.read_csv(file[0])["代码"]
+print(a)
+metric.reset()
+metric.update(torch.tensor([1.0]), torch.tensor([1.0]))
 
-stocks = list(stock_list)
-print(len(stocks))
-
-for code in stocks:
-    if code not in d.keys():
-        print(code)
+print(metric.compute())
